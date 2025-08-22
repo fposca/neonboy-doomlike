@@ -66,7 +66,7 @@ export default function Game() {
     /* ---------- Canvas ---------- */
     const canvas = canvasRef.current;
     const W = 600, H = 320;
-    canvas.width = W * 2.5; canvas.height = H * 2.5;
+    canvas.width = W * 3; canvas.height = H * 3;
     const ctx = canvas.getContext("2d");
     ctx.imageSmoothingEnabled = false;
     canvas.tabIndex = 0; setTimeout(() => canvas.focus(), 0);
@@ -153,6 +153,32 @@ export default function Game() {
         MAP[idx(Math.max(2,Math.floor(cx)), y)] = 0;
       }
     }
+/* Carvar arena para el boss + corredor al centro del mapa */
+function carveBossZone(cx, cy, rad = 2.5) {
+  // limpiar un cuadrado alrededor del boss
+  const x0 = Math.max(1, Math.floor(cx - rad));
+  const y0 = Math.max(1, Math.floor(cy - rad));
+  const x1 = Math.min(MAP_W - 2, Math.ceil(cx + rad));
+  const y1 = Math.min(MAP_H - 2, Math.ceil(cy + rad));
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      MAP[idx(x, y)] = 0;
+    }
+  }
+
+  // abrir un corredor hacia el centro del mapa
+  const cxI = Math.floor(cx), cyI = Math.floor(cy);
+  const midX = Math.floor(MAP_W / 2), midY = Math.floor(MAP_H / 2);
+
+  // primero horizontal, luego vertical (tipo “┘”)
+  const width = 1; // grosor del corredor (podés subir a 2 si querés más ancho)
+  for (let x = Math.min(cxI, midX); x <= Math.max(cxI, midX); x++) {
+    for (let k = -width; k <= width; k++) MAP[idx(x, clampf(cyI + k, 1, MAP_H - 2))] = 0;
+  }
+  for (let y = Math.min(cyI, midY); y <= Math.max(cyI, midY); y++) {
+    for (let k = -width; k <= width; k++) MAP[idx(clampf(midX + k, 1, MAP_W - 2), y)] = 0;
+  }
+}
 
     const player = {
       x: 3.5, y: MAP_H-2.5, a: -Math.PI/2, fov: Math.PI/3,
@@ -165,7 +191,7 @@ export default function Game() {
     };
 
     // victoria niveles 1-3
-    const WIN_DEMONS = 30, WIN_ORCS = 15, WIN_GREENS = 10;
+    const WIN_DEMONS = 1, WIN_ORCS = 0, WIN_GREENS = 10;
     let killsDemons = 0, killsOrcs = 0, greens = 0;
     let gameOver = false, win = false;
 
@@ -393,22 +419,37 @@ export default function Game() {
     let hitFlash = 0;
     const HIT_FLASH_TIME = 0.25;
 
-    // ===== Cooldown para hurt.wav =====
+    // ---- Cooldown del sonido de daño ----
     let hurtSfxCooldown = 0;
+
+    // ---- Invulnerabilidad global para evitar “metralleta” de daño ----
+    let invulnT = 0;
+    const GLOBAL_INVULN = 0.28; // 280 ms
 
     // Helper: aplicar daño (evita spam de SFX)
     function applyPlayerDamage(amount, flashK = 1.0) {
-      if (amount <= 0 || gameState !== "playing" || player.hp <= 0) return;
-      const prev = player.hp;
+      if (gameState !== "playing") return;
+      if (amount <= 0) return;
+
+      // Si estamos invulnerables, ignorar daño y NO sonar
+      if (invulnT > 0) return;
+
+      const prev = player.hp|0;
       player.hp = Math.max(0, player.hp - amount);
-      if (player.hp < prev) {
+      const nowHp = player.hp|0;
+
+      // Solo si realmente bajó la vida
+      if (nowHp < prev) {
+        invulnT = GLOBAL_INVULN;        // activar ventana de invulnerabilidad
         setFaceState("hurt", face.HURT_TIME);
         hitFlash = HIT_FLASH_TIME * flashK;
+
         if (hurtSfxCooldown === 0) {
           SFX.hurt();
-          hurtSfxCooldown = 0.15; // 150ms
+          hurtSfxCooldown = 0.15;       // 150 ms anti-spam del sonido
         }
       }
+
       if (player.hp <= 0) {
         player.hp = 0;
         endGame(false);
@@ -599,11 +640,16 @@ export default function Game() {
         projectiles.length=0;
 
         if (LEVEL === 4) {
-          // jefe
-          let p = randomSpawnPos(8);
-          if (!p) p = { x: MAP_W-4.5, y: 4.5 };
-          enemies.push(makeBoss(p.x, p.y));
-        } else {
+  // jefe
+  let p = randomSpawnPos(8);
+  if (!p) p = { x: MAP_W - 4.5, y: 4.5 };
+
+  // >>> AÑADIR ESTAS LÍNEAS ANTES DE ENCOLAR AL JEFE <<<
+  carveBossZone(p.x, p.y, 2.5);     // abre arena + corredor al centro
+  carveSafeZone(3.5, MAP_H - 2.5, 2.2); // (ya la tenías, asegura la salida del jugador)
+
+  enemies.push(makeBoss(p.x, p.y));
+} else {
           for (let i=0;i<INITIAL_ENEMIES;i++){
             const p = randomSpawnPos(5) || { x:6.5, y:MAP_H-6.5 };
             enemies.push(makeEnemy(p.x,p.y));
@@ -680,20 +726,26 @@ export default function Game() {
         }
       }
 
-      function enemyOnCrosshair(e, horizonShift) {
-        const angToE = Math.atan2(e.y - player.y, e.x - player.x);
-        const diffA  = Math.abs(normAngle(angToE - player.a));
-        if (diffA > 0.06) return false;
-        const r = castRayDDA(player.x, player.y, player.a);
-        const dWall = r.dist;
-        const dE = dist(player.x, player.y, e.x, e.y);
-        if (dE > dWall + 0.05) return false;
-        const distFix = dE * Math.cos(diffA);
-        const size = Math.max(8, (H / distFix) | 0);
-        const sy = ((H/2 + horizonShift) - size/2) | 0;
-        const cy = (H/2 + horizonShift) | 0;
-        return (cy >= sy && cy <= sy + size);
-      }
+     function enemyOnCrosshair(e, horizonShift) {
+  const angToE = Math.atan2(e.y - player.y, e.x - player.x);
+  const diffA  = Math.abs(normAngle(angToE - player.a));
+  if (diffA > 0.06) return false;
+
+  const r = castRayDDA(player.x, player.y, player.a);
+  const dWall = r.dist;
+
+  const dE = dist(player.x, player.y, e.x, e.y);
+  if (dE > dWall + 0.05) return false;
+
+  const distFix = dE * Math.cos(diffA);
+  const size = Math.max(8, (H / distFix) | 0);
+
+  const sy = ((H/2 + horizonShift) - size/2) | 0;
+  const cy = (H/2 + horizonShift) | 0;
+
+  return (cy >= sy && cy <= sy + size);
+}
+
 
       function damageEnemy(e,dmg){
         if(!e.alive) return;
@@ -727,8 +779,9 @@ export default function Game() {
       function tick(now){
         const dt = Math.min(0.05, (now-last)/1000); last=now;
 
-        // enfriar cooldown del sonido de daño
+        // enfriar cooldowns
         hurtSfxCooldown = Math.max(0, hurtSfxCooldown - dt);
+        invulnT = Math.max(0, invulnT - dt);
 
         if (gameState === "title") {
           drawTitle();
@@ -840,15 +893,18 @@ export default function Game() {
                 slideMoveEntity(e, bx, by);
               }
 
-              // Boss: disparo fireball con LOS
+              // Boss: disparo fireball con LOS (con offset para no nacer encima)
               if (e.type === "boss") {
                 e.shootCd = Math.max(0, e.shootCd - dt);
                 const toPlayer = Math.atan2(player.y - e.y, player.x - e.x);
                 e.dir = toPlayer;
                 if (e.shootCd === 0 && hasLineOfSight(e.x, e.y, player.x, player.y, 0.08, castRayDDA)) {
+                  const muzzle = 0.7; // offset desde el centro del boss
+                  const sx = e.x + Math.cos(toPlayer) * muzzle;
+                  const sy = e.y + Math.sin(toPlayer) * muzzle;
                   const vx = Math.cos(toPlayer) * FIREBALL_SPEED;
                   const vy = Math.sin(toPlayer) * FIREBALL_SPEED;
-                  projectiles.push({ x:e.x, y:e.y, vx, vy, alive:true, dmg:FIREBALL_DMG });
+                  projectiles.push({ x:sx, y:sy, vx, vy, alive:true, dmg:FIREBALL_DMG });
                   SFX.fireball && SFX.fireball();
                   e.shootCd = 1.1;
                 }
@@ -960,6 +1016,7 @@ export default function Game() {
           } else if (e.state==="hit") {
             img = SPR.boss.hit || SPR.boss.f2 || SPR.boss.f1;
           } else {
+            // Anim segun movimiento: frente alterna f1/f2, laterales usan izq/der
             const mvAng = e.moveAng ?? e.dir;
             const toCam = Math.atan2(player.y - e.y, player.x - e.x);
             const rel = normAngle(toCam - mvAng);
@@ -976,7 +1033,8 @@ export default function Game() {
           }
           if (!img || !img.width) return;
 
-          const sizeScaled = size * BOSS_SCALE;
+          // tamaño escalado del boss
+          const sizeScaled = size * 1.6; // BOSS_SCALE por si querés exponerlo arriba
           const halfScaled = (sizeScaled / 2) | 0;
           const x0s = Math.max(0, (sx - halfScaled) | 0);
           const x1s = Math.min(W - 1, (sx + halfScaled) | 0);
@@ -1105,6 +1163,74 @@ export default function Game() {
         bctx.fillStyle="#8f8";
         bctx.fillText(`PEDALS ${greens}/${WIN_GREENS}`,     W-150, y0+31);
       }
+function drawMiniMap() {
+  // Solo en nivel 4
+  if (LEVEL !== 4) return;
+
+  // Buscar jefe vivo
+  const boss = enemies.find(e => e.type === "boss" && e.alive);
+  if (!boss) return;
+
+  const SIZE = 88;           // lado del mapa en px
+  const PAD  = 6;            // margen al borde
+  const x0 = W - SIZE - PAD; // esquina sup-der
+  const y0 = PAD;
+
+  const sx = SIZE / MAP_W;
+  const sy = SIZE / MAP_H;
+
+  // Panel y fondo
+  bctx.fillStyle = "#000a";
+  bctx.fillRect(x0 - 2, y0 - 2, SIZE + 4, SIZE + 4);
+  bctx.fillStyle = "#0b0b0bcc";
+  bctx.fillRect(x0, y0, SIZE, SIZE);
+
+  // Paredes (chiquitas) para orientarse
+  for (let y = 0; y < MAP_H; y++) {
+    for (let x = 0; x < MAP_W; x++) {
+      const t = cell(x, y);
+      if (t > 0) {
+        // mismos tonos que las paredes del nivel (sin exagerar)
+        bctx.fillStyle = t === 3 ? "#4a78c9" : (t === 2 ? "#c018c0" : "#b03020");
+        bctx.fillRect(x0 + x * sx, y0 + y * sy, sx, sy);
+      }
+    }
+  }
+
+  // Jugador: aro + flecha de dirección
+  const px = x0 + player.x * sx;
+  const py = y0 + player.y * sy;
+  bctx.strokeStyle = "#ffea3a"; // amarillo
+  bctx.lineWidth = 1;
+  bctx.beginPath();
+  bctx.arc(px, py, 3, 0, Math.PI * 2);
+  bctx.stroke();
+  const lookX = px + Math.cos(player.a) * 8;
+  const lookY = py + Math.sin(player.a) * 8;
+  bctx.beginPath();
+  bctx.moveTo(px, py);
+  bctx.lineTo(lookX, lookY);
+  bctx.stroke();
+
+  // Jefe: punto rojo
+  const bx = x0 + boss.x * sx;
+  const by = y0 + boss.y * sy;
+  bctx.fillStyle = "#ff4343";
+  bctx.beginPath();
+  bctx.arc(bx, by, 3.2, 0, Math.PI * 2);
+  bctx.fill();
+
+  // Distancia (tiles) como feedback de cercanía
+  const d = Math.hypot(boss.x - player.x, boss.y - player.y);
+  bctx.font = "bold 9px 'Roboto', monospace";
+  bctx.fillStyle = "#fff";
+  bctx.fillText(`dist: ${d.toFixed(1)}`, x0 + 4, y0 + SIZE + 12);
+
+  // Borde
+  bctx.strokeStyle = "#ffffff";
+  bctx.lineWidth = 1;
+  bctx.strokeRect(x0, y0, SIZE, SIZE);
+}
 
       function drawFrame(hShift, nowMs){
         const horizon = ((H/2)+hShift)|0;
@@ -1210,6 +1336,7 @@ export default function Game() {
         // HUD + barra boss
         drawHUD();
         drawBossHP();
+        drawMiniMap();
 
         // Flash rojo
         if (hitFlash > 0) {
