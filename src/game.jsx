@@ -134,18 +134,18 @@ export default function Game() {
     };
 
     // victoria: 30 demon + 15 orc  (y greens>=10)
-    const WIN_DEMONS = 1, WIN_ORCS = 0, WIN_GREENS = 10;
+    const WIN_DEMONS = 3, WIN_ORCS = 0, WIN_GREENS = 10;
     let killsDemons = 0, killsOrcs = 0, greens = 0;
     let gameOver = false, win = false;
 
     /* ---------- Enemigos ---------- */
     const enemies = [];
-    const ENEMY_SPEED = 0.75;                   // base demon/orc
+    const ENEMY_SPEED = 0.85;                   // base demon/orc
     const BOLA_SPEED  = ENEMY_SPEED * 2.0;      // bola = doble
     const TOUCH_DMG_NORMAL = 10;
     const TOUCH_DMG_BOLA   = TOUCH_DMG_NORMAL * 2; // bola = doble
     const CONTACT_DPS = 25;
-    const BACKOFF_DIST = 0.4, BACKOFF_TIME = 0.5, TOUCH_COOLDOWN = 0.6;
+    const BACKOFF_DIST = 0.6, BACKOFF_TIME = 0.5, TOUCH_COOLDOWN = 0.6;
 
     function makeEnemy(x, y, type) {
       if (!type) {
@@ -381,10 +381,10 @@ export default function Game() {
       loadImage("/sprites/mosaico-4.jpg").catch(()=>null),
       loadImage("/sprites/mosaico-5.jpg").catch(()=>null),
       // PISO y TECHO
-      loadImage("/sprites/piso.png").catch(()=>null),
+      loadImage("/sprites/piso.jpg").catch(()=>null),
       loadImage("/sprites/techo.jpg").catch(()=>null),
       // HUD + portada
-      loadImage("/sprites/hud/panel.jpg").catch(()=>null),
+      loadImage("/sprites/hud/panel.png").catch(()=>null),
       loadImage("/sprites/hud/face-normal.png").catch(()=>null),
       loadImage("/sprites/hud/face-sadic.png").catch(()=>null),
       loadImage("/sprites/hud/face-pain.png").catch(()=>null),
