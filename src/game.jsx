@@ -1,4 +1,12 @@
 import { useEffect, useRef } from "react";
+// resuelve URLs respetando la base de Vite
+const asset = (p) => `${import.meta.env.BASE_URL}${p.replace(/^\/+/, "")}`;
+// utilidades para cargar imágenes
+const loadOk   = (p) => loadImage(asset(p)).catch(() => null);
+// fallback especial para gun-2 -> gin-2
+const loadGun2 = () =>
+  loadImage(asset("sprites/gun-2.png"))
+    .catch(() => loadImage(asset("sprites/gin-2.png")).catch(() => null));
 
 /* ===== Helpers ===== */
 function loadImage(src) {
@@ -191,14 +199,14 @@ function carveBossZone(cx, cy, rad = 2.5) {
     };
 
     // victoria niveles 1-3
-    const WIN_DEMONS = 1, WIN_ORCS = 0, WIN_GREENS = 10;
+    const WIN_DEMONS = 30, WIN_ORCS = 5, WIN_GREENS = 5;
     let killsDemons = 0, killsOrcs = 0, greens = 0;
     let gameOver = false, win = false;
 
     /* ---------- Enemigos ---------- */
     const enemies = [];
-    const ENEMY_SPEED = 0.85;                   // base demon/orc
-    const BOLA_SPEED  = ENEMY_SPEED * 2.0;      // bola = doble
+    const ENEMY_SPEED = 0.95;                   // base demon/orc
+    const BOLA_SPEED  = ENEMY_SPEED * 2.5;      // bola = doble
     const TOUCH_DMG_NORMAL = 10;
     const TOUCH_DMG_BOLA   = TOUCH_DMG_NORMAL * 2; // bola = doble
     const CONTACT_DPS = 25;
@@ -262,25 +270,26 @@ function carveBossZone(cx, cy, rad = 2.5) {
     }
 
     /* ---------- Audio ---------- */
-    const SFX = {
-      shoot:        makeSfx("/sfx/shoot.wav", 0.8),
-      shotgun:      makeSfx("/sfx/shotgun.mp3", 0.9),
-      punch:        makeSfx("/sfx/punch.wav", 0.8),
-      enemyDie:     makeSfx("/sfx/enemy_die.wav", 0.9),
-      enemySpawn:   makeSfx("/sfx/enemy_spawn.wav", 0.6),
-      breath1:      makeSfx("/sfx/enemy_breath_1.wav", 0.6),
-      breath2:      makeSfx("/sfx/enemy_breath_2.wav", 0.6),
-      pickupAmmo:   makeSfx("/sfx/pickup_ammo.wav", 0.7),
-      pickupShells: makeSfx("/sfx/pickup_shells.mp3", 0.7),
-      pickupHealth: makeSfx("/sfx/pickup_health.wav", 0.7),
-      pickupGreen:  makeSfx("/sfx/pickup_green.wav", 0.7),
-      hurt:         makeSfx("/sfx/hurt.wav", 0.7),
-      bolaSpawn:    makeSfx("/sfx/bola_spawn.wav", 0.8),
-      bossHit:      makeSfx("/sfx/boss_hit.wav", 0.9),
-      bossDie:      makeSfx("/sfx/boss_die.wav", 1.0),
-      fireball:     makeSfx("/sfx/fireball.wav", 0.6),
-    };
-    const MUSIC = makeMusic("/music/loop.ogg", 0.11);
+   const SFX = {
+  shoot:        makeSfx(asset("sfx/shoot.wav"),        0.8),
+  shotgun:      makeSfx(asset("sfx/shotgun.mp3"),      0.9),
+  punch:        makeSfx(asset("sfx/punch.wav"),        0.8),
+  enemyDie:     makeSfx(asset("sfx/enemy_die.wav"),    0.9),
+  enemySpawn:   makeSfx(asset("sfx/enemy_spawn.wav"),  0.6),
+  breath1:      makeSfx(asset("sfx/enemy_breath_1.wav"), 0.6),
+  breath2:      makeSfx(asset("sfx/enemy_breath_2.wav"), 0.6),
+  pickupAmmo:   makeSfx(asset("sfx/pickup_ammo.wav"),  0.7),
+  pickupShells: makeSfx(asset("sfx/pickup_shells.mp3"),0.7),
+  pickupHealth: makeSfx(asset("sfx/pickup_health.wav"),0.7),
+  pickupGreen:  makeSfx(asset("sfx/pickup_green.wav"), 0.7),
+  hurt:         makeSfx(asset("sfx/hurt.wav"),         0.7),
+  bolaSpawn:    makeSfx(asset("sfx/bola_spawn.wav"),   0.8),
+  bossHit:      makeSfx(asset("sfx/boss_hit.wav"),     0.9),
+  bossDie:      makeSfx(asset("sfx/boss_die.wav"),     1.0),
+  fireball:     makeSfx(asset("sfx/fireball.wav"),     0.6),
+};
+const MUSIC = makeMusic(asset("music/loop.ogg"), 0.11); // (o el volumen que prefieras)
+
 
     /* ---------- Respiración aleatoria ---------- */
     let breathLoopStarted = false;
@@ -478,74 +487,73 @@ function carveBossZone(cx, cy, rad = 2.5) {
     let rafId = 0;
     let cleanup = null;
 
-    Promise.all([
-      // DEMON
-      loadImage("/sprites/frente-izquierda.png"),
-      loadImage("/sprites/frente-derecha.png"),
-      loadImage("/sprites/back.png"),
-      loadImage("/sprites/izquierda.png"),
-      loadImage("/sprites/derecha.png"),
-      loadImage("/sprites/hit-1.png"),
-      loadImage("/sprites/hit-2.png"),
-      loadImage("/sprites/die-1.png"),
-      loadImage("/sprites/die-2.png"),
-      // ORC
-      loadImage("/sprites/orco-frente.png"),
-      loadImage("/sprites/adelante-1.png"),
-      loadImage("/sprites/orco-espalda.png"),
-      loadImage("/sprites/orco-izquierda.png"),
-      loadImage("/sprites/orco-derecha.png"),
-      loadImage("/sprites/orco-muerto.png"),
-      loadImage("/sprites/orco-muerto-1.png"),
-      // BOLA
-      loadImage("/sprites/bola-frente.png").catch(()=>null),
-      loadImage("/sprites/bola-izquierda.png").catch(()=>null),
-      loadImage("/sprites/bola-derecha.png").catch(()=>null),
-      loadImage("/sprites/bola-atras.png").catch(()=>null),
-      loadImage("/sprites/bola-muerta.png").catch(()=>null),
-      // armas
-      loadImage("/sprites/fists.png").catch(()=>null),
-      loadImage("/sprites/fists-2.png").catch(()=>null),
-      loadImage("/sprites/gun.png").catch(()=>null),
-      loadImage("/sprites/gun-2.png").catch(()=>loadImage("/sprites/gin-2.png").catch(()=>null)),
-      loadImage("/sprites/escopeta.png").catch(()=>null),
-      loadImage("/sprites/escopeta-2.png").catch(()=>null),
-      // pickups + walls (niveles 1 y 2)
-      loadImage("/sprites/ammo.png").catch(()=>null),
-      loadImage("/sprites/heart.png").catch(()=>null),
-      loadImage("/sprites/pedal.png").catch(()=>null),
-      loadImage("/sprites/shells.png").catch(()=>null),
-      loadImage("/sprites/brick_red.png").catch(()=>null),
-      loadImage("/sprites/brick_pink.jpg").catch(()=>null),
-      loadImage("/sprites/mosaico-3.jpg").catch(()=>null),   // -> mosaico3
-      loadImage("/sprites/mosaico-44.jpg").catch(()=>null),  // -> mosaico4
-      // nivel 3
-      loadImage("/sprites/mosaico-4.jpg").catch(()=>null),   // -> mosaico4jpg
-      loadImage("/sprites/mosaico-5.jpg").catch(()=>null),   // -> mosaico5jpg
-      // nivel 4
-      loadImage("/sprites/mosaico-11.png").catch(()=>null),
-      loadImage("/sprites/mosaico-12.png").catch(()=>null),
-      loadImage("/sprites/mosaico-13.png").catch(()=>null),
-      // PISO y TECHO
-      loadImage("/sprites/piso.jpg").catch(()=>null),
-      loadImage("/sprites/techo.jpg").catch(()=>null),
-      // HUD + portada + final
-      loadImage("/sprites/hud/panel.png").catch(()=>null),
-      loadImage("/sprites/hud/face-normal.png").catch(()=>null),
-      loadImage("/sprites/hud/face-sadic.png").catch(()=>null),
-      loadImage("/sprites/hud/face-pain.png").catch(()=>null),
-      loadImage("/sprites/freepik__agregar-ondo__55653.png").catch(()=>null),
-      loadImage("/sprites/final.jpg").catch(()=>null),
-
-      // JEFE
-      loadImage("/sprites/monster-frente-1.png").catch(()=>null),
-      loadImage("/sprites/monster-frente-2.png").catch(()=>null),
-      loadImage("/sprites/monster-back.png").catch(()=>null),
-      loadImage("/sprites/monster-izquierda.png").catch(()=>null),
-      loadImage("/sprites/monster-derecha.png").catch(()=>null),
-      loadImage("/sprites/monster-hit.png").catch(()=>null),
-      loadImage("/sprites/monster-die-1.png").catch(()=>null),
-      loadImage("/sprites/monster-die-2.png").catch(()=>null),
+   Promise.all([
+  // DEMON
+  loadOk("sprites/frente-izquierda.png"),
+  loadOk("sprites/frente-derecha.png"),
+  loadOk("sprites/back.png"),
+  loadOk("sprites/izquierda.png"),
+  loadOk("sprites/derecha.png"),
+  loadOk("sprites/hit-1.png"),
+  loadOk("sprites/hit-2.png"),
+  loadOk("sprites/die-1.png"),
+  loadOk("sprites/die-2.png"),
+  // ORC
+  loadOk("sprites/orco-frente.png"),
+  loadOk("sprites/adelante-1.png"),
+  loadOk("sprites/orco-espalda.png"),
+  loadOk("sprites/orco-izquierda.png"),
+  loadOk("sprites/orco-derecha.png"),
+  loadOk("sprites/orco-muerto.png"),
+  loadOk("sprites/orco-muerto-1.png"),
+  // BOLA
+  loadOk("sprites/bola-frente.png"),
+  loadOk("sprites/bola-izquierda.png"),
+  loadOk("sprites/bola-derecha.png"),
+  loadOk("sprites/bola-atras.png"),
+  loadOk("sprites/bola-muerta.png"),
+  // ARMAS
+  loadOk("sprites/fists.png"),
+  loadOk("sprites/fists-2.png"),
+  loadOk("sprites/gun.png"),
+  loadGun2(),
+  loadOk("sprites/escopeta.png"),
+  loadOk("sprites/escopeta-2.png"),
+  // PICKUPS + WALLS
+  loadOk("sprites/ammo.png"),
+  loadOk("sprites/heart.png"),
+  loadOk("sprites/pedal.png"),
+  loadOk("sprites/shells.png"),
+  loadOk("sprites/brick_red.png"),
+  loadOk("sprites/brick_pink.jpg"),
+  loadOk("sprites/mosaico-3.jpg"),
+  loadOk("sprites/mosaico-44.jpg"),
+  // NIVEL 3
+  loadOk("sprites/mosaico-4.jpg"),
+  loadOk("sprites/mosaico-5.jpg"),
+  // NIVEL 4
+  loadOk("sprites/mosaico-11.png"),
+  loadOk("sprites/mosaico-12.png"),
+  loadOk("sprites/mosaico-13.png"),
+  // PISO / TECHO
+  loadOk("sprites/piso.jpg"),
+  loadOk("sprites/techo.jpg"),
+  // HUD + portada + final
+  loadOk("sprites/hud/panel.png"),
+  loadOk("sprites/hud/face-normal.png"),
+  loadOk("sprites/hud/face-sadic.png"),
+  loadOk("sprites/hud/face-pain.png"),
+  loadOk("sprites/freepik__agregar-ondo__55653.png"),
+  loadOk("sprites/final.jpg"),
+  // JEFE
+  loadOk("sprites/monster-frente-1.png"),
+  loadOk("sprites/monster-frente-2.png"),
+  loadOk("sprites/monster-back.png"),
+  loadOk("sprites/monster-izquierda.png"),
+  loadOk("sprites/monster-derecha.png"),
+  loadOk("sprites/monster-hit.png"),
+  loadOk("sprites/monster-die-1.png"),
+  loadOk("sprites/monster-die-2.png"),
     ]).then(([
       // demon
       d_frI, d_frD, d_back, d_left, d_right, d_hit1, d_hit2, d_die1, d_die2,
